@@ -32,7 +32,8 @@ def config_text():
     return ("".join(f"#define CONFIG_{key} 0\n" for key in disabled)
             + "".join(f"#define CONFIG_{key} 1\n" for key in ("STATIC", "AVUTIL", "SWRESAMPLE"))
             + '#define FFMPEG_LICENSE "LGPL version 2.1 or later"\n'
-            + "#define HAVE_INLINE_ASM 0\n#define HAVE_X86ASM 0\n")
+            + "#define ARCH_AARCH64 0\n#define ARCH_ARM 0\n#define ARCH_X86 0\n"
+            + "#define HAVE_INLINE_ASM 1\n#define HAVE_X86ASM 0\n")
 
 
 class PackageTests(unittest.TestCase):
@@ -127,8 +128,9 @@ class PackageTests(unittest.TestCase):
         for key in ("CONFIG_GPL", "CONFIG_NONFREE", "CONFIG_VERSION3", "CONFIG_AVCODEC"):
             with self.assertRaises(ValueError):
                 verify_config(config_text().replace(f"{key} 0", f"{key} 1"))
-        with self.assertRaises(ValueError):
-            verify_config(config_text().replace("HAVE_INLINE_ASM 0", "HAVE_INLINE_ASM 1"))
+        for key in ("ARCH_AARCH64", "ARCH_ARM", "ARCH_X86", "HAVE_X86ASM"):
+            with self.assertRaises(ValueError):
+                verify_config(config_text().replace(f"{key} 0", f"{key} 1"))
 
     def test_manifest_has_no_mutable_build_run_identity(self):
         _, manifest = packager.assemble(self.stage, "b" * 40)

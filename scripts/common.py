@@ -72,5 +72,10 @@ def verify_config(text):
                 f"Unexpected configuration: {key}")
     require('#define FFMPEG_LICENSE "LGPL version 2.1 or later"' in text,
             "Unexpected FFmpeg license")
-    for key, value in re.findall(r"^#define (HAVE_\w*ASM) (\d+)$", text, re.MULTILINE):
-        require(value == "0", f"Assembly enabled: {key}")
+    # --disable-asm clears architecture implementations, not compiler capability probes.
+    architectures = re.findall(r"^#define (ARCH_\w+) (\d+)$", text, re.MULTILINE)
+    require(architectures, "Missing architecture configuration")
+    for key, value in architectures:
+        require(value == "0", f"Assembly architecture enabled: {key}")
+    require(not re.search(r"^#define HAVE_X86ASM 1$", text, re.MULTILINE),
+            "Standalone x86 assembly enabled")

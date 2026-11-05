@@ -82,7 +82,11 @@ builds the libraries. Three separate Ubuntu 24.04 runners build the ABI matrix.
 The [package contract](package.json) pins source, SHA, NDK, API and all feature
 flags. Only `libavutil.a`, `libswresample.a` and their installed public headers
 are staged. Assembly is deliberately disabled for parity with the tested
-source-build configuration. No local or application repository build is needed.
+source-build configuration. The assembly check verifies disabled architecture
+implementations; FFmpeg's `HAVE_INLINE_ASM` compiler capability probe can remain
+true under the specified `--disable-asm` flag. No extra configuration flags
+are added to change that capability probe. No local or application repository
+build is needed.
 
 1. Run `python3 -m unittest discover -s tests -v`, `bash -n scripts/build.sh`
    and `shellcheck scripts/build.sh` for changes.
