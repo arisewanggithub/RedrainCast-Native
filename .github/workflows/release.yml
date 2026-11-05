@@ -51,7 +51,7 @@ jobs:
           persist-credentials: false
       - name: Install pinned NDK
         run: |
-          sdkmanager --install "ndk;27.2.12479018"
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;27.2.12479018"
       - name: Build, inspect ELF and smoke-link
         run: bash scripts/build.sh "${{ matrix.abi }}" "$ANDROID_HOME/ndk/27.2.12479018"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -82,7 +82,7 @@ jobs:
       - name: Validate Google Prefab schema and real CMake targets
         run: |
           set -euo pipefail
-          sdkmanager --install "ndk;27.2.12479018"
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;27.2.12479018"
           curl --fail --location --retry 3 \
             https://dl.google.com/dl/android/maven2/com/google/prefab/cli/2.1.0/cli-2.1.0-all.jar \
             -o /tmp/prefab.jar

@@ -125,7 +125,8 @@ Every release contains:
 
 To rebuild, extract the build materials on a **fresh** Ubuntu 24.04 runner with
 Python 3.12+, bash, GNU make, host C compiler, and Android SDK command-line
-tools. Install `sdkmanager "ndk;27.2.12479018"` and invoke
+tools. Install with
+`"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;27.2.12479018"` and invoke
 `bash scripts/build.sh ABI "$ANDROID_HOME/ndk/27.2.12479018"` separately for
 each ABI on separate runners. Follow the workflow for merging, CLI validation
 and compliance assets. FFmpeg source is downloaded/verified afresh. Generated
