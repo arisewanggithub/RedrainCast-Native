@@ -1,0 +1,156 @@
+name: Build and publish immutable FFmpeg PCM
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ffmpeg-pcm-release
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Validate scripts and package contract
+        run: |
+          python3 -m unittest discover -s tests -v
+          python3 -m compileall -q scripts tests
+          bash -n scripts/build.sh
+          shellcheck scripts/build.sh
+      - name: Require immutable releases and unused tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="$(python3 -c 'from scripts.common import SPEC; print(SPEC["tag"])')"
+          gh api "repos/$GITHUB_REPOSITORY/immutable-releases" --jq .enabled | grep -qx true
+          gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" > /tmp/releases.json
+          python3 - "$tag" <<'PY'
+          import json, sys
+          assert not any(r["tag_name"] == sys.argv[1] for r in json.load(open("/tmp/releases.json"))), "Release already exists"
+          PY
+          test -z "$(git ls-remote --tags origin "refs/tags/$tag" "refs/tags/$tag^{}")"
+
+  build:
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        abi: [arm64-v8a, armeabi-v7a, x86_64]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Install pinned NDK
+        run: |
+          sdkmanager --install "ndk;27.2.12479018"
+      - name: Build, inspect ELF and smoke-link
+        run: bash scripts/build.sh "${{ matrix.abi }}" "$ANDROID_HOME/ndk/27.2.12479018"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: native-${{ matrix.abi }}
+          path: /tmp/redrain-ffmpeg/stage/
+          if-no-files-found: error
+          retention-days: 7
+
+  package:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: native-*
+          path: out/staging
+          merge-multiple: true
+      - name: Merge deterministic AAR
+        run: |
+          python3 scripts/package.py --staging out/staging --out out/dist --commit "$GITHUB_SHA"
+          python3 scripts/package.py --staging out/staging --out out/repeat --commit "$GITHUB_SHA"
+          cmp out/dist/*.aar out/repeat/*.aar
+      - name: Validate Google Prefab schema and real CMake targets
+        run: |
+          set -euo pipefail
+          sdkmanager --install "ndk;27.2.12479018"
+          curl --fail --location --retry 3 \
+            https://dl.google.com/dl/android/maven2/com/google/prefab/cli/2.1.0/cli-2.1.0-all.jar \
+            -o /tmp/prefab.jar
+          echo 'e219c8cd6bfd9ff71503a57c6af34b9ba060f03525cc3e58330dee53245a5ed6  /tmp/prefab.jar' | sha256sum -c -
+          python3 scripts/validate_consumer.py \
+            --aar out/dist/ffmpeg-pcm-android-7.1.3-r1.aar \
+            --ndk "$ANDROID_HOME/ndk/27.2.12479018" --prefab-cli /tmp/prefab.jar \
+            --work /tmp/prefab-consumer --report out/dist/consumer-validation.json
+      - name: Assemble corresponding source, rebuild materials and licenses
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 https://ffmpeg.org/releases/ffmpeg-7.1.3.tar.xz \
+            -o out/dist/ffmpeg-7.1.3.tar.xz
+          git archive --format=tar HEAD | gzip -n > out/dist/ffmpeg-pcm-android-7.1.3-r1-build-materials.tar.gz
+          python3 scripts/release_assets.py --dist out/dist
+          (cd out/dist && sha256sum -c SHA256SUMS)
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-assets
+          path: out/dist/
+          if-no-files-found: error
+          retention-days: 30
+
+  publish:
+    needs: package
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: release-assets
+          path: out/dist
+      - name: Publish once, with all assets, then lock release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="$(python3 -c 'from scripts.common import SPEC; print(SPEC["tag"])')"
+          gh api "repos/$GITHUB_REPOSITORY/immutable-releases" --jq .enabled | grep -qx true
+          (cd out/dist && sha256sum -c SHA256SUMS)
+          test -z "$(git ls-remote --tags origin "refs/tags/$tag" "refs/tags/$tag^{}")"
+          gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" > /tmp/releases.json
+          python3 - "$tag" <<'PY'
+          import json, sys
+          assert not any(r["tag_name"] == sys.argv[1] for r in json.load(open("/tmp/releases.json"))), "Release already exists (including draft)"
+          PY
+          cat > /tmp/notes.txt <<EOF
+          Public FFmpeg 7.1.3 PCM static libraries, LGPL-2.1-or-later.
+
+          ABIs: arm64-v8a, armeabi-v7a, x86_64. Minimum Android API 30.
+          NDK 27.2.12479018. Assembly, GPL, nonfree and version3 disabled.
+          Prefab schema 2: redrain_ffmpeg::swresample and redrain_ffmpeg::avutil.
+          Whole-archive and Prefab/CMake smoke links passed for all ABIs with 16 KiB LOAD alignment.
+
+          Corresponding upstream source, exact build materials, configurations,
+          licenses, provenance and SHA256SUMS are attached.
+          Application distributors must separately satisfy LGPL relinking obligations.
+
+          Build: https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
+          Commit: $GITHUB_SHA
+          EOF
+          gh release create "$tag" out/dist/* --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" --title "$tag" --notes-file /tmp/notes.txt --draft
+          gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --draft=false
+          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag" --jq .immutable | grep -qx true
