@@ -24,13 +24,12 @@ jobs:
           python3 -m compileall -q scripts tests
           bash -n scripts/build.sh
           shellcheck scripts/build.sh
-      - name: Require immutable releases and unused tag
+      - name: Require unused release and tag
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           tag="$(python3 -c 'from scripts.common import SPEC; print(SPEC["tag"])')"
-          gh api "repos/$GITHUB_REPOSITORY/immutable-releases" --jq .enabled | grep -qx true
           gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" > /tmp/releases.json
           python3 - "$tag" <<'PY'
           import json, sys
@@ -127,7 +126,6 @@ jobs:
         run: |
           set -euo pipefail
           tag="$(python3 -c 'from scripts.common import SPEC; print(SPEC["tag"])')"
-          gh api "repos/$GITHUB_REPOSITORY/immutable-releases" --jq .enabled | grep -qx true
           (cd out/dist && sha256sum -c SHA256SUMS)
           test -z "$(git ls-remote --tags origin "refs/tags/$tag" "refs/tags/$tag^{}")"
           gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" > /tmp/releases.json

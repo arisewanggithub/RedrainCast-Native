@@ -87,7 +87,11 @@ source-build configuration. No local or application repository build is needed.
 1. Run `python3 -m unittest discover -s tests -v`, `bash -n scripts/build.sh`
    and `shellcheck scripts/build.sh` for changes.
 2. Push reviewed build materials to this public repository.
-3. Ensure repository **immutable releases** are enabled.
+3. Ensure repository **immutable releases** are enabled. An administrator can
+   verify with `gh api repos/arisewanggithub/RedrainCast-Native/immutable-releases`.
+   This settings endpoint requires administration access, unavailable to the
+   built-in Actions token; no administrator credential is stored in the pipeline.
+   The workflow separately asserts the published release's `immutable` field.
 4. Run `gh workflow run release.yml --repo arisewanggithub/RedrainCast-Native`.
 5. Inspect all matrix and packaging jobs. The workflow checks every archive
    object's ELF machine, disabled licensing/features, installed headers, and
