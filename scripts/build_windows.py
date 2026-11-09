@@ -87,8 +87,6 @@ def build(architecture, work):
     target = SPEC["architectures"][architecture]
     require(os.environ.get("MSYSTEM") == target["msystem"],
             f"{architecture} build requires MSYS2 {target['msystem']}, got {os.environ.get('MSYSTEM')!r}")
-    require(os.environ.get("MINGW_PREFIX", "").replace("\\", "/").lower() == target["prefix"].lower(),
-            "MSYS2 compiler prefix does not match the selected architecture")
 
     work = Path(work).resolve()
     require(not work.exists(), f"Build directory already exists; preserve it: {work}")
