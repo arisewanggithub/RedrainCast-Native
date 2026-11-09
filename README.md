@@ -182,7 +182,9 @@ download them with `gh release download <tag> --repo arisewanggithub/RedrainCast
 and verify `SHA256SUMS`. If consumer testing fails, delete the draft and its tag,
 fix the build, and create a new candidate revision. After consumer testing passes,
 publish the draft with `gh release edit <tag> --repo arisewanggithub/RedrainCast-Native --draft=false`.
-Published releases are immutable and cannot be used as disposable test candidates.
+GitHub permits deleting a published immutable release, but its tag name can
+never be reused; a failed public release would require a new revision and tag.
+Draft candidates avoid burning a release tag during consumer testing.
 Until a Windows release passes app validation, consumers should continue using
 their existing pinned runtime.
 
