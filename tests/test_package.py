@@ -8,7 +8,7 @@ import zipfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-from common import MODULES, SPEC, sha256, verify_archive, verify_config, verify_load_alignment
+from common import MODULES, SPEC, aar_filename, sha256, verify_archive, verify_config, verify_load_alignment
 from common import write_json
 
 loader = importlib.util.spec_from_file_location("packager", Path(__file__).resolve().parents[1]
@@ -63,6 +63,10 @@ class PackageTests(unittest.TestCase):
 
     def assemble(self):
         return packager.assemble(self.stage, "a" * 40)[0]
+
+    def test_aar_asset_name_is_independent_of_release_tag(self):
+        self.assertEqual(aar_filename(), f"{SPEC['artifact']}-{SPEC['version']}.aar")
+        self.assertEqual(aar_filename(), "ffmpeg-pcm-android-7.1.3-r1.aar")
 
     def test_deterministic_schema_and_contents(self):
         first = self.assemble()

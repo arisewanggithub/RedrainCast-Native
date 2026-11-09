@@ -1,15 +1,23 @@
 # RedrainCast native dependencies
 
-Public, standalone build materials for **unmodified FFmpeg 7.1.3** PCM utilities.
-There is no application code, JNI implementation, Java, Kotlin, codec, network
-support, DEX, or runtime fallback in this repository/package. The small C smoke
-test is only a build-time linker probe and is not shipped in the AAR.
+Public build materials for **FFmpeg 7.1.3**. The Android package builds
+unmodified upstream PCM utilities; the separate Windows runtime builds a
+minimal decoder feature set from the same upstream source. The Android AAR
+contains no application code, JNI implementation, Java, Kotlin, codec, network
+support, DEX, or runtime fallback. Its small C smoke test is only a build-time
+linker probe and is not shipped in the AAR.
 
 ## Immutable package contract
 
+New Native releases use platform- and payload-specific tags:
+`redraincast-ffmpeg-<platform>-<payload>-<version>`. Existing published release
+tags are immutable and remain valid; the Android package's current `r1` release
+therefore retains its original `ffmpeg-pcm-android-7.1.3-r1` tag and artifact
+name.
+
 | Property | Value |
 |---|---|
-| Release tag | `ffmpeg-pcm-android-7.1.3-r1` |
+| Current Android release tag (legacy immutable name) | `ffmpeg-pcm-android-7.1.3-r1` |
 | Asset / Gradle version | `ffmpeg-pcm-android-7.1.3-r1.aar` / `7.1.3-r1` |
 | Prefab package / schema | `redrain_ffmpeg` / `2` |
 | Prefab numeric version | `7.1.3.1` (schema requires a CMake-compatible numeric version) |
@@ -77,8 +85,8 @@ segments; the consuming shared object must set its own 16 KiB alignment.
 
 ## Build, validate, release
 
-Only the manually dispatched [release workflow](.github/workflows/release.yml)
-builds the libraries. Three separate Ubuntu 24.04 runners build the ABI matrix.
+Only the manually dispatched [Android release workflow](.github/workflows/release.yml)
+builds the AAR libraries. Three separate Ubuntu 24.04 runners build the ABI matrix.
 The [package contract](package.json) pins source, SHA, NDK, API and all feature
 flags. Only `libavutil.a`, `libswresample.a` and their installed public headers
 are staged. Assembly is deliberately disabled for parity with the tested
@@ -116,7 +124,7 @@ checkout authentication. Artifacts use explicit staging allowlists. Generated
 build settings. Paths in those settings refer to the documented fixed
 `/tmp/redrain-ffmpeg` runner workspace, never a developer machine.
 
-Every release contains:
+Every Android AAR release contains:
 
 * The deterministic AAR (six static libraries, ABI-specific public headers,
   Prefab metadata, upstream license/author notices and configuration/provenance).
@@ -139,11 +147,59 @@ the helper rather than moving a configured build tree between machines.
 
 Changing the NDK, API, source, flags, packaging, or static dependency contract
 requires a **new package revision and tag** (for example `7.1.3-r2`, numeric
-Prefab version `7.1.3.2`). Update the contract and every version-pinned workflow
-and consumer example together. Never rebuild/replace `r1` under its old URL.
+Prefab version `7.1.3.2`). Use a tag such as
+`redraincast-ffmpeg-android-pcm-7.1.3-r2` for a new Android package revision;
+keep the `ffmpeg-pcm-android` artifact coordinate and asset filename expected
+by Gradle. The Android consumer supports both the original release path and
+the new platform-specific release path. Update the contract and every
+version-pinned workflow and consumer example together. Never rebuild/replace
+`r1` under its old URL.
 Archive contents are deterministic for identical build inputs; runner/compiler
 changes can affect rebuilt binary bytes, so pin/retain the recorded toolchain
 and use the released checksums as the artifact identity.
+
+## Minimal Windows decoder runtime
+
+[`windows.json`](windows.json) separately defines the Windows shared-library
+build. It uses the same checksum-pinned FFmpeg 7.1.3 source but disables all
+features by default and enables only H.264, HEVC, AAC and Opus decoders,
+resampling, and D3D11VA H.264/HEVC hardware configurations. GPL, nonfree,
+version3, format/demuxer, filter, network and program support remain disabled.
+The ARM64 and x64 builds preserve the FFmpeg 7.1 ABI consumed by
+`FFmpeg.AutoGen` 7.1.1.
+Its release tag is
+`redraincast-ffmpeg-windows-decoders-7.1.3-r1`; its ZIP assets and build
+materials use the matching `redraincast-ffmpeg-windows-decoders` prefix.
+
+The manually dispatched
+[Windows release workflow](.github/workflows/release-windows.yml) builds each
+architecture on its native Windows runner, runs a codec/D3D11VA/ABI smoke test,
+validates PE architecture and configuration, and assembles separate deterministic
+ZIP files. It creates a **draft** release candidate with the matching FFmpeg
+source, exact build materials, generated configuration, LGPL notice, provenance
+and checksums. Test those exact draft assets in the Windows app before publishing:
+download them with `gh release download <tag> --repo arisewanggithub/RedrainCast-Native`
+and verify `SHA256SUMS`. If consumer testing fails, delete the draft and its tag,
+fix the build, and create a new candidate revision. After consumer testing passes,
+publish the draft with `gh release edit <tag> --repo arisewanggithub/RedrainCast-Native --draft=false`.
+Published releases are immutable and cannot be used as disposable test candidates.
+Until a Windows release passes app validation, consumers should continue using
+their existing pinned runtime.
+
+The Android app remains pinned to the existing Android AAR coordinate and
+checksum. Adding the separately tagged Windows decoder release does not change
+that package, so it requires no Android app update. If a future Android AAR
+revision is published, update the app's dependency coordinate and checksum
+together; the app already supports both legacy and platform-specific tag paths.
+The Maven/Ivy artifact coordinate remains tied to the AAR's existing
+`ffmpeg-pcm-android` module name.
+
+For a local build, use MSYS2 `CLANGARM64` with the ARM64 toolchain or `MINGW64`
+with the x64 toolchain, plus `make`, `nasm` and `python`; run
+`python scripts/build_windows.py arm64` or `python scripts/build_windows.py x64`
+from the repository root. The script refuses a mismatched MSYS2 environment or
+an existing build directory. Run `python -m unittest discover -s tests -v`
+before changing the build contract or release workflow.
 
 ## Licensing
 

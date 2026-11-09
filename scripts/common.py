@@ -12,6 +12,10 @@ MODULES = ("avutil", "swresample")
 REPOSITORY = "https://github.com/arisewanggithub/RedrainCast-Native"
 
 
+def aar_filename():
+    return f"{SPEC['artifact']}-{SPEC['version']}.aar"
+
+
 def require(condition, message):
     if not condition:
         raise ValueError(message)

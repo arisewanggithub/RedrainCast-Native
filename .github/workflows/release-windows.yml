@@ -1,0 +1,171 @@
+name: Build minimal Windows FFmpeg release candidate
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: redraincast-ffmpeg-windows-decoders-release
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Validate Windows build contract
+        run: |
+          python3 -m unittest discover -s tests -v
+          python3 -m compileall -q scripts tests
+      - name: Require unused release and tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="$(python3 -c 'import json; print(json.load(open("windows.json"))["tag"])')"
+          gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" > /tmp/releases.json
+          python3 - "$tag" <<'PY'
+          import json, sys
+          assert not any(r["tag_name"] == sys.argv[1] for r in json.load(open("/tmp/releases.json"))), "Release already exists"
+          PY
+          test -z "$(git ls-remote --tags origin "refs/tags/$tag" "refs/tags/$tag^{}")"
+
+  build:
+    needs: validate
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - architecture: arm64
+            runner: windows-11-vs2026-arm
+            msystem: CLANGARM64
+            packages: mingw-w64-clang-aarch64-toolchain
+          - architecture: x64
+            runner: windows-2025
+            msystem: MINGW64
+            packages: mingw-w64-x86_64-toolchain
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: msys2/setup-msys2@d6302217d42868e2f586b4e3fb9f19d4cf161176 # main
+        with:
+          msystem: ${{ matrix.msystem }}
+          update: true
+          install: >-
+            make
+            nasm
+            python
+            ${{ matrix.packages }}
+      - name: Build, validate configuration and smoke-test decoders
+        shell: msys2 {0}
+        env:
+          GITHUB_SHA: ${{ github.sha }}
+        run: python scripts/build_windows.py "${{ matrix.architecture }}"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: windows-${{ matrix.architecture }}
+          path: out/windows-build/stage/${{ matrix.architecture }}/
+          if-no-files-found: error
+          retention-days: 7
+
+  package:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: windows-*
+          path: out/staging
+          merge-multiple: false
+      - name: Validate staged DLLs and assemble deterministic packages
+        run: |
+          mv out/staging/windows-arm64 out/staging/arm64
+          mv out/staging/windows-x64 out/staging/x64
+          python3 scripts/package_windows.py --staging out/staging --out out/dist
+          python3 scripts/package_windows.py --staging out/staging --out out/repeat
+          for archive in out/dist/*.zip; do
+            cmp "$archive" "out/repeat/$(basename "$archive")"
+          done
+      - name: Attach pinned source and exact build materials
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 https://ffmpeg.org/releases/ffmpeg-7.1.3.tar.xz \
+            -o out/dist/ffmpeg-7.1.3.tar.xz
+          echo 'f0bf043299db9e3caacb435a712fc541fbb07df613c4b893e8b77e67baf3adbe  out/dist/ffmpeg-7.1.3.tar.xz' | sha256sum -c -
+          artifact="$(python3 -c 'import json; print(json.load(open("windows.json"))["artifact"])')"
+          version="$(python3 -c 'import json; print(json.load(open("windows.json"))["version"])')"
+          git archive --format=tar HEAD | gzip -n > "out/dist/$artifact-$version-build-materials.tar.gz"
+          (cd out/dist && sha256sum *.zip *.tar.xz *.tar.gz > SHA256SUMS)
+          (cd out/dist && sha256sum -c SHA256SUMS)
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: windows-release-assets
+          path: out/dist/
+          if-no-files-found: error
+          retention-days: 30
+
+  publish:
+    needs: package
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: windows-release-assets
+          path: out/dist
+      - name: Create draft release candidate for consumer validation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="$(python3 -c 'import json; print(json.load(open("windows.json"))["tag"])')"
+          version="$(python3 -c 'import json; print(json.load(open("windows.json"))["version"])')"
+          (cd out/dist && sha256sum -c SHA256SUMS)
+          test -z "$(git ls-remote --tags origin "refs/tags/$tag" "refs/tags/$tag^{}")"
+          gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" > /tmp/releases.json
+          python3 - "$tag" <<'PY'
+          import json, sys
+          assert not any(r["tag_name"] == sys.argv[1] for r in json.load(open("/tmp/releases.json"))), "Release already exists (including draft)"
+          PY
+          cat > /tmp/notes.txt <<EOF
+          Minimal FFmpeg 7.1.3 Windows shared decoder runtime, LGPL-2.1-or-later.
+
+          Architectures: ARM64 and x64.
+          Included decoders: H.264, HEVC, AAC and Opus.
+          D3D11VA hardware configurations enabled for H.264 and HEVC.
+          GPL, nonfree, version3, programs, networking, formats, filters and
+          unrelated decoders are disabled.
+
+          Corresponding upstream source, exact build materials, configurations,
+          LGPL notices, provenance and SHA256SUMS are attached.
+
+          Build: https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
+          Commit: $GITHUB_SHA
+          EOF
+          gh release create "$tag" out/dist/* --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" --title "RedrainCast FFmpeg Windows decoders $version" --notes-file /tmp/notes.txt --draft
+          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag" > /tmp/release.json
+          python3 - "$tag" <<'PY'
+          import json, sys
+          release = json.load(open("/tmp/release.json"))
+          assert release["tag_name"] == sys.argv[1]
+          assert release["draft"] is True
+          assert release["immutable"] is False
+          PY

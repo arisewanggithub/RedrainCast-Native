@@ -8,7 +8,7 @@ import tarfile
 import zipfile
 from pathlib import Path
 
-from common import ROOT, SPEC, require, sha256
+from common import ROOT, SPEC, aar_filename, require, sha256
 
 
 def main():
@@ -27,7 +27,7 @@ def main():
         "provenance.json": (dist / "provenance.json").read_bytes(),
         "consumer-validation.json": (dist / "consumer-validation.json").read_bytes(),
     }
-    with zipfile.ZipFile(dist / f"{SPEC['tag']}.aar") as aar:
+    with zipfile.ZipFile(dist / aar_filename()) as aar:
         for name in aar.namelist():
             if name.startswith(("META-INF/licenses/", "META-INF/build/")):
                 contents[name] = aar.read(name)

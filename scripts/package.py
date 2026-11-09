@@ -7,7 +7,7 @@ import re
 import zipfile
 from pathlib import Path
 
-from common import MODULES, ROOT, SPEC, REPOSITORY, require, sha256, verify_archive
+from common import MODULES, ROOT, SPEC, REPOSITORY, aar_filename, require, sha256, verify_archive
 from common import verify_config, write_json
 
 
@@ -96,7 +96,7 @@ def main():
     args = parser.parse_args()
     payload, manifest = assemble(args.staging, args.commit)
     args.out.mkdir(parents=True, exist_ok=True)
-    (args.out / f"{SPEC['tag']}.aar").write_bytes(payload)
+    (args.out / aar_filename()).write_bytes(payload)
     write_json(args.out / "provenance.json", manifest)
 
 
