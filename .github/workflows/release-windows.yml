@@ -161,11 +161,13 @@ jobs:
           EOF
           gh release create "$tag" out/dist/* --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" --title "RedrainCast FFmpeg Windows decoders $version" --notes-file /tmp/notes.txt --draft
-          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag" > /tmp/release.json
+          gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" > /tmp/releases-after.json
           python3 - "$tag" <<'PY'
           import json, sys
-          release = json.load(open("/tmp/release.json"))
-          assert release["tag_name"] == sys.argv[1]
+          releases = [release for release in json.load(open("/tmp/releases-after.json"))
+                      if release["tag_name"] == sys.argv[1]]
+          assert len(releases) == 1, "Expected exactly one candidate release"
+          release = releases[0]
           assert release["draft"] is True
           assert release["immutable"] is False
           PY
