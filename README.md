@@ -186,8 +186,9 @@ publish the draft with `gh release edit <tag> --repo arisewanggithub/RedrainCast
 GitHub permits deleting a published immutable release, but its tag name can
 never be reused; a failed public release would require a new revision and tag.
 Draft candidates avoid burning a release tag during consumer testing.
-Until a Windows release passes app validation, consumers should continue using
-their existing pinned runtime.
+Revision `r1` is published as the immutable release above. Its exact ARM64
+asset passed the receiver media self-test in the Windows app; native ARM64 and
+x64 smoke tests passed in CI. This did not include a physical-device cast.
 
 The Android app remains pinned to the existing Android AAR coordinate and
 checksum. Adding the separately tagged Windows decoder release does not change
