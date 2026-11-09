@@ -116,8 +116,9 @@ build is needed.
 7. Only then does a narrowly permissioned job draft a release with all assets,
    publish it, and verify GitHub reports it immutable.
 
-The build helper runs configure/make under `env -i` with only an explicit
-public tool path, fixed temporary workspace, HOME, locale and source epoch.
+The build helper runs configure/make under a minimal environment with only an
+explicit public tool path, fixed temporary workspace, HOME, locale, source
+epoch and the Windows process variables needed by compiler subprocesses.
 It never uploads configure logs, environment dumps, SDK credentials, or
 checkout authentication. Artifacts use explicit staging allowlists. Generated
 `config.h`, `config_components.h` and `config.mak` contain only these sanitized

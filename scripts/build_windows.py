@@ -123,7 +123,7 @@ def build(architecture, work):
         "MSYSTEM": target["msystem"],
         "MINGW_PREFIX": target["prefix"],
     }
-    for key in ("SYSTEMROOT", "WINDIR", "TEMP", "TMP"):
+    for key in ("SYSTEMROOT", "WINDIR", "TEMP", "TMP", "COMSPEC"):
         if key in os.environ:
             env[key] = os.environ[key]
     Path(env["HOME"]).mkdir()
