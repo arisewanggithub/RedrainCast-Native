@@ -9,31 +9,30 @@ linker probe and is not shipped in the AAR.
 
 ## Immutable package contract
 
-New Native releases use platform- and payload-specific tags:
-`redraincast-ffmpeg-<platform>-<payload>-<version>`. Existing published release
-tags are immutable and remain valid; the Android package's current `r1` release
-therefore retains its original `ffmpeg-pcm-android-7.1.3-r1` tag and artifact
-name.
+The next native package revision is published as one immutable release
+containing both Android and Windows assets. The existing platform-specific
+`r1` releases remain available as historical immutable releases.
 
 | Property | Value |
 |---|---|
-| Current Android release tag (legacy immutable name) | `ffmpeg-pcm-android-7.1.3-r1` |
-| Asset / Gradle version | `ffmpeg-pcm-android-7.1.3-r1.aar` / `7.1.3-r1` |
+| Unified release tag | `redraincast-ffmpeg-7.1.3-r2` |
+| Android asset / Gradle version | `ffmpeg-pcm-android-7.1.3-r2.aar` / `7.1.3-r2` |
 | Prefab package / schema | `redrain_ffmpeg` / `2` |
-| Prefab numeric version | `7.1.3.1` (schema requires a CMake-compatible numeric version) |
+| Prefab numeric version | `7.1.3.2` (schema requires a CMake-compatible numeric version) |
 | Targets | `redrain_ffmpeg::swresample`, `redrain_ffmpeg::avutil` |
 | ABIs | `arm64-v8a`, `armeabi-v7a`, `x86_64` |
 | Minimum Android API / NDK | `30` / `27.2.12479018` (Prefab major `27`) |
 | Linkage / STL | static PIC / none |
 | FFmpeg source SHA256 | `f0bf043299db9e3caacb435a712fc541fbb07df613c4b893e8b77e67baf3adbe` |
 
-Credential-free download:
+The release also contains the Windows ARM64 and x64 decoder/audio ZIPs,
+platform-specific build materials, provenance and a combined `SHA256SUMS`.
+The shared release tag is only the container; Android and Windows keep their
+own asset names and package contracts.
 
-https://github.com/arisewanggithub/RedrainCast-Native/releases/download/ffmpeg-pcm-android-7.1.3-r1/ffmpeg-pcm-android-7.1.3-r1.aar
-
-Download `SHA256SUMS` from the same release and verify the AAR before accepting
-an update. Releases are protected by GitHub release immutability. The workflow
-refuses an existing release or tag; it never replaces published assets.
+Download `SHA256SUMS` from the unified release and verify each package before
+consuming it. Releases are immutable; the workflow refuses an existing release
+or tag and never replaces published assets.
 
 ## Android consumer
 
@@ -45,6 +44,7 @@ ivy {
     url = uri("https://github.com/arisewanggithub/RedrainCast-Native/releases/download")
     patternLayout {
         artifact("ffmpeg-pcm-android-[revision]/[artifact]-[revision].[ext]")
+        artifact("redraincast-ffmpeg-[revision]/[artifact]-[revision].[ext]")
     }
     metadataSources { artifact() }
     content { includeModule("dev.redraincast.native", "ffmpeg-pcm-android") }
@@ -63,7 +63,7 @@ android {
     buildFeatures { prefab = true }
 }
 dependencies {
-    implementation("dev.redraincast.native:ffmpeg-pcm-android:7.1.3-r1@aar")
+    implementation("dev.redraincast.native:ffmpeg-pcm-android:7.1.3-r2@aar")
 }
 ```
 
@@ -85,8 +85,9 @@ segments; the consuming shared object must set its own 16 KiB alignment.
 
 ## Build, validate, release
 
-Only the manually dispatched [Android release workflow](.github/workflows/release.yml)
-builds the AAR libraries. Three separate Ubuntu 24.04 runners build the ABI matrix.
+Only the manually dispatched [unified release workflow](.github/workflows/release.yml)
+builds the Android AAR and Windows decoder packages. Three separate Ubuntu 24.04
+runners build the Android ABI matrix; separate Windows runners build ARM64 and x64.
 The [package contract](package.json) pins source, SHA, NDK, API and all feature
 flags. Only `libavutil.a`, `libswresample.a` and their installed public headers
 are staged. Assembly is deliberately disabled for parity with the tested
@@ -113,8 +114,9 @@ build is needed.
    Prefab 2.1.0 CLI parses schema 2 and generates CMake integrations. Actual
    NDK links using the documented target names run for every ABI and verify
    16 KiB LOAD segment alignment before publication.
-7. Only then does a narrowly permissioned job draft a release with all assets,
-   publish it, and verify GitHub reports it immutable.
+7. After every platform build and packaging check passes, a narrowly permissioned
+   job publishes one release directly (no draft) with all assets and verifies
+   GitHub reports it immutable.
 
 The build helper runs configure/make under a minimal environment with only an
 explicit public tool path, fixed temporary workspace, HOME, locale, source
@@ -146,15 +148,11 @@ and compliance assets. FFmpeg source is downloaded/verified afresh. Generated
 config files are supplied for inspection and relinking; regenerate them using
 the helper rather than moving a configured build tree between machines.
 
-Changing the NDK, API, source, flags, packaging, or static dependency contract
-requires a **new package revision and tag** (for example `7.1.3-r2`, numeric
-Prefab version `7.1.3.2`). Use a tag such as
-`redraincast-ffmpeg-android-pcm-7.1.3-r2` for a new Android package revision;
-keep the `ffmpeg-pcm-android` artifact coordinate and asset filename expected
-by Gradle. The Android consumer supports both the original release path and
-the new platform-specific release path. Update the contract and every
-version-pinned workflow and consumer example together. Never rebuild/replace
-`r1` under its old URL.
+Changing a platform package requires a new package revision. A single release
+can contain packages with independent platform versions; the shared release tag
+is just their common asset location. Keep each package's asset naming and
+consumer checksum in sync. Never rebuild/replace a published package under its
+old URL.
 Archive contents are deterministic for identical build inputs; runner/compiler
 changes can affect rebuilt binary bytes, so pin/retain the recorded toolchain
 and use the released checksums as the artifact identity.
@@ -168,35 +166,19 @@ resampling, and D3D11VA H.264/HEVC hardware configurations. GPL, nonfree,
 version3, format/demuxer, filter, network and program support remain disabled.
 The ARM64 and x64 builds preserve the FFmpeg 7.1 ABI consumed by
 `FFmpeg.AutoGen` 7.1.1.
-Its release tag is
-`redraincast-ffmpeg-windows-decoders-7.1.3-r1`; its ZIP assets and build
-materials use the matching `redraincast-ffmpeg-windows-decoders` prefix.
-
 The manually dispatched
-[Windows release workflow](.github/workflows/release-windows.yml) builds each
-architecture on its native Windows runner, runs a codec/D3D11VA/ABI smoke test,
-validates PE architecture and configuration, and assembles separate deterministic
-ZIP files. It creates a **draft** release candidate with the matching FFmpeg
-source, exact build materials, generated configuration, LGPL notice, provenance
-and checksums. Test those exact draft assets in the Windows app before publishing:
-download them with `gh release download <tag> --repo arisewanggithub/RedrainCast-Native`
-and verify `SHA256SUMS`. If consumer testing fails, delete the draft and its tag,
-fix the build, and create a new candidate revision. After consumer testing passes,
-publish the draft with `gh release edit <tag> --repo arisewanggithub/RedrainCast-Native --draft=false`.
-GitHub permits deleting a published immutable release, but its tag name can
-never be reused; a failed public release would require a new revision and tag.
-Draft candidates avoid burning a release tag during consumer testing.
-Revision `r1` is published as the immutable release above. Its exact ARM64
-asset passed the receiver media self-test in the Windows app; native ARM64 and
-x64 smoke tests passed in CI. This did not include a physical-device cast.
+[unified release workflow](.github/workflows/release.yml) builds and validates
+the Android package and both Windows architectures, then publishes all
+platform assets together in one public immutable release. It does not create a
+draft. Android Prefab/CMake consumer validation and Windows decoder/ABI smoke
+tests run before publication. The release includes the matching FFmpeg source,
+build materials, generated configuration, LGPL notices, provenance and
+combined checksums. The Windows `r1` asset also passed the receiver synthetic
+H.264 self-test; this did not include a physical-device cast.
 
-The Android app remains pinned to the existing Android AAR coordinate and
-checksum. Adding the separately tagged Windows decoder release does not change
-that package, so it requires no Android app update. If a future Android AAR
-revision is published, update the app's dependency coordinate and checksum
-together; the app already supports both legacy and platform-specific tag paths.
-The Maven/Ivy artifact coordinate remains tied to the AAR's existing
-`ffmpeg-pcm-android` module name.
+Platform asset names and package versions remain independent; only the release
+tag is shared. The Android Maven/Ivy artifact coordinate remains
+`ffmpeg-pcm-android`.
 
 For a local build, use MSYS2 `CLANGARM64` with the ARM64 toolchain or `MINGW64`
 with the x64 toolchain, plus `make`, `nasm` and `python`; run

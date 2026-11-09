@@ -1,9 +1,9 @@
 {
   "artifact": "ffmpeg-pcm-android",
-  "version": "7.1.3-r1",
-  "tag": "ffmpeg-pcm-android-7.1.3-r1",
+  "version": "7.1.3-r2",
+  "tag": "redraincast-ffmpeg-7.1.3-r2",
   "prefab_name": "redrain_ffmpeg",
-  "prefab_version": "7.1.3.1",
+  "prefab_version": "7.1.3.2",
   "source_version": "7.1.3",
   "source_url": "https://ffmpeg.org/releases/ffmpeg-7.1.3.tar.xz",
   "source_sha256": "f0bf043299db9e3caacb435a712fc541fbb07df613c4b893e8b77e67baf3adbe",

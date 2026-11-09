@@ -66,7 +66,7 @@ class PackageTests(unittest.TestCase):
 
     def test_aar_asset_name_is_independent_of_release_tag(self):
         self.assertEqual(aar_filename(), f"{SPEC['artifact']}-{SPEC['version']}.aar")
-        self.assertEqual(aar_filename(), "ffmpeg-pcm-android-7.1.3-r1.aar")
+        self.assertEqual(aar_filename(), "ffmpeg-pcm-android-7.1.3-r2.aar")
 
     def test_deterministic_schema_and_contents(self):
         first = self.assemble()
@@ -76,7 +76,7 @@ class PackageTests(unittest.TestCase):
         with zipfile.ZipFile(aar) as archive:
             prefab = json.loads(archive.read("prefab/prefab.json"))
             self.assertEqual(prefab, {"schema_version": 2, "name": "redrain_ffmpeg",
-                                     "version": "7.1.3.1", "dependencies": []})
+                                     "version": "7.1.3.2", "dependencies": []})
             for abi in SPEC["abis"]:
                 for module in MODULES:
                     base = f"prefab/modules/{module}/libs/android.{abi}"

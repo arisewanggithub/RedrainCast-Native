@@ -44,7 +44,7 @@ class WindowsBuildTests(unittest.TestCase):
         flags = build_windows.SPEC["configure_flags"]
         self.assertEqual(build_windows.SPEC["artifact"], "redraincast-ffmpeg-windows-decoders")
         self.assertEqual(build_windows.SPEC["tag"],
-                         "redraincast-ffmpeg-windows-decoders-7.1.3-r1")
+                         "redraincast-ffmpeg-7.1.3-r2")
         self.assertIn("--disable-everything", flags)
         self.assertIn("--enable-decoder=h264", flags)
         self.assertIn("--enable-decoder=hevc", flags)
